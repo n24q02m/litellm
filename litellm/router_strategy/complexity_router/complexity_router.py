@@ -1086,6 +1086,7 @@ class ClassificationOutcome(NamedTuple):
         "default_model_fallback",
     ]
     classifier_cost: float | None = None
+    classifier_model: str | None = None
     capability_forecast: CapabilityClassifierForecast | None = None
     llm_v2_forecast: LLMV2Decision | None = None
     jev_verdict: JevVerdict | None = None
@@ -2364,6 +2365,7 @@ class ComplexityRouter(CustomLogger):
                 return refused._replace(
                     signals=(*refused.signals, f"{config.provider}-classifier:{tier_name}"),
                     classifier_cost=verdict.cost,
+                    classifier_model=f"{verdict.provider}/{verdict.model}",
                     jev_verdict=verdict,
                 )
             if breaker is not None and permit is not None:
@@ -2381,6 +2383,7 @@ class ComplexityRouter(CustomLogger):
                 ),
                 cause="jev_classifier",
                 classifier_cost=verdict.cost,
+                classifier_model=f"{verdict.provider}/{verdict.model}",
                 jev_verdict=verdict,
             )
         except asyncio.CancelledError:
@@ -4914,6 +4917,13 @@ class ComplexityRouter(CustomLogger):
                     conversation_continuing=conversation_continuing,
                     cause=outcome.cause,
                     signals=outcome.signals,
+                    classifier_model=outcome.classifier_model
+                    or (
+                        f"{outcome.jev_verdict.provider}/{outcome.jev_verdict.model}"
+                        if outcome.jev_verdict is not None
+                        else None
+                    ),
+                    classifier_cost=outcome.classifier_cost,
                     classifier_failure_reason=outcome.classifier_failure_reason,
                     classifier_error_type=outcome.classifier_error_type,
                     escalation_keyword=escalation_keyword,
@@ -4989,12 +4999,15 @@ class ComplexityRouter(CustomLogger):
 
         tier_litellm_params: Final = self._litellm_params_for_model(tier, routed_model)
         classifier_model: Final = (
-            f"{outcome.jev_verdict.provider}/{outcome.jev_verdict.model}"
-            if outcome.cause == "jev_classifier" and outcome.jev_verdict is not None
-            else self.config.classifier_llm_config.model
-            if outcome.cause in ("llm_classifier", "capability_classifier", "llm_v2_classifier", "llm_v2_fallback")
-            and self.config.classifier_llm_config is not None
-            else None
+            outcome.classifier_model
+            or (
+                f"{outcome.jev_verdict.provider}/{outcome.jev_verdict.model}"
+                if outcome.cause == "jev_classifier" and outcome.jev_verdict is not None
+                else self.config.classifier_llm_config.model
+                if outcome.cause in ("llm_classifier", "capability_classifier", "llm_v2_classifier", "llm_v2_fallback")
+                and self.config.classifier_llm_config is not None
+                else None
+            )
         )
         # cause=default_model_fallback means no tier was decided: the classifier failed and the
         # operator asked for default_model. Only the plugin path reaches here (the non-plugin one

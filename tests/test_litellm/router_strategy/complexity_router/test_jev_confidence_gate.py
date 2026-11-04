@@ -131,7 +131,7 @@ async def test_below_threshold_refuses_route_down_and_fails_over_to_the_expensiv
 
     outcome = await router.aclassify("Explain this")
 
-    assert outcome.tier == ComplexityTier.REASONING  # the tier whose pool holds default_model
+    assert outcome.tier == ComplexityTier.REASONING
     assert outcome.cause == "default_model_fallback"
     assert outcome.signals == (
         "classifier-failed:default-model",
@@ -141,7 +141,7 @@ async def test_below_threshold_refuses_route_down_and_fails_over_to_the_expensiv
     assert outcome.jev_verdict is not None
     assert outcome.jev_verdict.confidence == 0.42
     assert outcome.classifier_cost == pytest.approx(0.0011)
-
+    assert outcome.classifier_model == "typesafe/jev-1.13.0"
 
 @pytest.mark.asyncio
 async def test_above_threshold_applies_the_route_down() -> None:
@@ -213,7 +213,7 @@ async def test_gate_refusal_is_a_classifier_success_for_the_circuit_breaker() ->
     first = await router.aclassify("Explain this")
     second = await router.aclassify("Explain this")
 
-    assert client.calls == 2  # the breaker stayed closed: refusals are policy, not health
+    assert client.calls == 2
     assert first.cause == second.cause == "default_model_fallback"
 
 
@@ -353,7 +353,7 @@ def test_gate_refusal_reasons_cover_every_gate_independently() -> None:
     assert reason(config, "REASONING", "REASONING", 0.0) is None
     # Confidence gate: closed below the threshold, open at it (complexity gates follow).
     assert reason(config, "MEDIUM", "REASONING", 0.69) == "low-confidence"
-    assert reason(config, "MEDIUM", "REASONING", 0.7) == "high-complexity"  # missing score is 1.0 > 0.5
+    assert reason(config, "MEDIUM", "REASONING", 0.7) == "high-complexity"
     # Complexity gates pass when the wire carries a qualifying answer.
     assert reason(config, "MEDIUM", "REASONING", 0.7, complexity_score=0.3, complexity_confidence=0.6) is None
     # Missing complexity data is hard: unknown score 1.0 refuses, unknown confidence 0.0 refuses.
